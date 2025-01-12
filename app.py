@@ -7,6 +7,8 @@ from collections import Counter
 import re
 from urllib.parse import urlparse
 import os
+from konlpy.tag import Okt
+import numpy as np
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///newsletter.db'
@@ -97,14 +99,30 @@ def get_keywords():
     week_ago = datetime.now() - timedelta(days=7)
     articles = Newsletter.query.filter(Newsletter.date >= week_ago).all()
     
+    # 형태소 분석기 초기화
+    okt = Okt()
+    
+    # 불용어 정의
+    stopwords = {'있다', '하다', '이다', '되다', '그', '및', '제', '할', '수', '등', '들', '것', '거', '말'}
+    
+    # 모든 기사의 텍스트 결합
     text = ' '.join([f"{article.title} {article.content}" for article in articles])
-    words = re.findall(r'\w+', text)
-    word_counts = Counter(words)
+    
+    # 형태소 분석 및 명사 추출
+    nouns = okt.nouns(text)
+    
+    # 불용어 제거 및 2글자 이상 단어만 선택
+    filtered_words = [word for word in nouns if word not in stopwords and len(word) >= 2]
+    
+    # 단어 빈도수 계산
+    word_count = Counter(filtered_words)
     
     # 상위 10개 키워드 추출
-    top_keywords = dict(sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:10])
+    top_keywords = word_count.most_common(10)
     
-    return jsonify(top_keywords)
+    return jsonify({
+        'keywords': [{'word': word, 'count': count} for word, count in top_keywords]
+    })
 
 @app.route('/api/related_articles/<keyword>')
 def get_related_articles(keyword):
@@ -118,6 +136,22 @@ def get_related_articles(keyword):
         'url': article.url,
         'date': article.date.strftime('%Y-%m-%d')
     } for article in articles])
+
+@app.route('/api/search', methods=['GET'])
+def search_articles():
+    query = request.args.get('query', '')
+    if not query:
+        return jsonify({'error': '검색어를 입력해주세요.'}), 400
+    
+    # 제목과 내용에서 검색
+    articles = Newsletter.query.filter(
+        db.or_(
+            Newsletter.title.ilike(f'%{query}%'),
+            Newsletter.content.ilike(f'%{query}%')
+        )
+    ).order_by(Newsletter.date.desc()).all()
+    
+    return jsonify([article.to_dict() for article in articles])
 
 @app.route('/api/delete_article/<int:seq>', methods=['DELETE'])
 def delete_article(seq):

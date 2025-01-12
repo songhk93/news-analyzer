@@ -19,7 +19,26 @@
 
     <div class="container mt-4">
         <h2>저장된 기사 목록</h2>
-        <button class="btn btn-primary mb-3" onclick="loadKeywords()">키워드 재설정</button>
+        
+        <!-- 검색 폼 추가 -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text" id="searchInput" class="form-control" placeholder="검색어를 입력하세요...">
+                    <button class="btn btn-outline-secondary" type="button" onclick="searchArticles()">검색</button>
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-primary" onclick="loadKeywords()">키워드 분석</button>
+            </div>
+        </div>
+
+        <!-- 키워드 표시 영역 추가 -->
+        <div id="keywordsArea" class="mb-3">
+            <h4>주요 키워드</h4>
+            <div id="keywordsList" class="d-flex flex-wrap gap-2"></div>
+        </div>
+
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead>
@@ -77,16 +96,71 @@
             }
         }
 
+        function searchArticles() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) {
+                loadArticles();
+                return;
+            }
+
+            fetch(`/api/search?query=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+                    const tbody = document.getElementById('articlesTableBody');
+                    tbody.innerHTML = '';
+                    data.forEach(article => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${article.seq}</td>
+                            <td><a href="${article.url}" target="_blank">${article.title}</a></td>
+                            <td>${article.date}</td>
+                            <td>${article.domain}</td>
+                            <td>${article.content.substring(0, 100)}...</td>
+                            <td>
+                                <button class="btn btn-danger btn-sm" onclick="deleteArticle(${article.seq})">삭제</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                });
+        }
+
         function loadKeywords() {
             fetch('/api/keywords')
                 .then(response => response.json())
                 .then(data => {
-                    alert('키워드가 재설정되었습니다.');
+                    const keywordsList = document.getElementById('keywordsList');
+                    keywordsList.innerHTML = '';
+                    data.keywords.forEach(item => {
+                        const badge = document.createElement('span');
+                        badge.className = 'badge bg-secondary me-2';
+                        badge.textContent = `${item.word} (${item.count})`;
+                        badge.style.cursor = 'pointer';
+                        badge.onclick = () => {
+                            document.getElementById('searchInput').value = item.word;
+                            searchArticles();
+                        };
+                        keywordsList.appendChild(badge);
+                    });
                 });
         }
 
-        // 페이지 로드 시 기사 목록 로드
-        document.addEventListener('DOMContentLoaded', loadArticles);
+        // 검색 입력창에서 Enter 키 이벤트 처리
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchArticles();
+            }
+        });
+
+        // 페이지 로드 시 기사 목록과 키워드 로드
+        document.addEventListener('DOMContentLoaded', () => {
+            loadArticles();
+            loadKeywords();
+        });
     </script>
 </body>
 </html>
