@@ -9,9 +9,14 @@ from urllib.parse import urlparse
 import os
 from konlpy.tag import Okt
 import numpy as np
+from dotenv import load_dotenv
+
+# 환경 변수 로드
+load_dotenv()
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///newsletter.db'
+# 데이터베이스 설정
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///newsletter.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -162,4 +167,4 @@ def delete_article(seq):
 
 if __name__ == '__main__':
     create_tables()
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
