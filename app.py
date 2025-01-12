@@ -18,28 +18,39 @@ import time
 # 환경 변수 로드
 load_dotenv()
 
-app = Flask(__name__, 
-    template_folder='templates',
-    static_folder='static'
+app = Flask(__name__)
+
+# 기본 설정
+app.config.update(
+    SQLALCHEMY_DATABASE_URI='sqlite:///newsletter.db',
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    SECRET_KEY='your-secret-key-here',
+    TEMPLATES_AUTO_RELOAD=True
 )
-# 데이터베이스 설정
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///newsletter.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your-secret-key-here'  # 보안을 위한 시크릿 키 추가
+
+# 데이터베이스 초기화
 db = SQLAlchemy(app)
 
 # 로깅 설정
-if not app.debug:
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
-    file_handler = RotatingFileHandler('logs/news_analyzer.log', maxBytes=10240, backupCount=10)
-    file_handler.setFormatter(logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-    ))
-    file_handler.setLevel(logging.INFO)
-    app.logger.addHandler(file_handler)
-    app.logger.setLevel(logging.INFO)
-    app.logger.info('News Analyzer startup')
+if not os.path.exists('logs'):
+    os.mkdir('logs')
+file_handler = RotatingFileHandler('logs/news_analyzer.log', maxBytes=10240, backupCount=10)
+file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+))
+file_handler.setLevel(logging.INFO)
+app.logger.addHandler(file_handler)
+app.logger.setLevel(logging.INFO)
+app.logger.info('News Analyzer startup')
+
+@app.before_request
+def before_request():
+    app.logger.info(f'Processing request: {request.method} {request.path}')
+
+@app.after_request
+def after_request(response):
+    app.logger.info(f'Request completed: {response.status}')
+    return response
 
 class Newsletter(db.Model):
     seq = db.Column(db.Integer, primary_key=True)
