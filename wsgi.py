@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 프로젝트 디렉토리 설정
-project_dir = '/home/songhk/news-analyzer'
+project_dir = '/home/new1/news-analyzer'
 if project_dir not in sys.path:
     sys.path.insert(0, project_dir)
 
