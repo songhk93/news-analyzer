@@ -20,8 +20,9 @@ load_dotenv()
 
 app = Flask(__name__)
 # 데이터베이스 설정
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///newsletter.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///newsletter.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'your-secret-key-here'  # 보안을 위한 시크릿 키 추가
 db = SQLAlchemy(app)
 
 # 로깅 설정
