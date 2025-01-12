@@ -74,70 +74,85 @@
     </div>
 
     <script>
-        function submitUrl() {
-            const url = document.getElementById('urlInput').value;
+        async function submitUrl() {
+            const url = document.getElementById('urlInput').value.trim();
             const statusDiv = document.getElementById('urlStatus');
             
-            fetch('/api/submit_url', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ url: url })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    statusDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-                } else {
-                    statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
-                    loadKeywords();
-                }
-            })
-            .catch(error => {
-                statusDiv.innerHTML = `<div class="alert alert-danger">오류가 발생했습니다: ${error}</div>`;
-            });
-        }
+            if (!url) {
+                statusDiv.innerHTML = '<div class="alert alert-danger">URL을 입력해주세요.</div>';
+                return;
+            }
 
-        function loadKeywords() {
-            fetch('/api/keywords')
-                .then(response => response.json())
-                .then(data => {
-                    const keywordsDiv = document.getElementById('keywords');
-                    keywordsDiv.innerHTML = '';
-                    Object.entries(data).forEach(([keyword, count]) => {
-                        const span = document.createElement('span');
-                        span.className = 'keyword-item';
-                        span.textContent = `${keyword} (${count})`;
-                        span.onclick = () => loadRelatedArticles(keyword);
-                        keywordsDiv.appendChild(span);
-                    });
+            statusDiv.innerHTML = '<div class="alert alert-info">URL을 처리중입니다...</div>';
+            
+            try {
+                const response = await fetch('/api/submit_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ url: url })
                 });
-        }
 
-        function loadRelatedArticles(keyword) {
-            fetch(`/api/related_articles/${keyword}`)
-                .then(response => response.json())
-                .then(data => {
-                    const articlesDiv = document.getElementById('relatedArticles');
-                    articlesDiv.innerHTML = `<h6>키워드: ${keyword}</h6>`;
-                    if (data.length === 0) {
-                        articlesDiv.innerHTML += '<p>관련 기사가 없습니다.</p>';
-                    } else {
-                        const ul = document.createElement('ul');
-                        ul.className = 'list-group';
-                        data.forEach(article => {
-                            const li = document.createElement('li');
-                            li.className = 'list-group-item';
-                            li.innerHTML = `
-                                <a href="${article.url}" target="_blank">${article.title}</a>
-                                <small class="text-muted">(${article.date})</small>
-                            `;
-                            ul.appendChild(li);
-                        });
-                        articlesDiv.appendChild(ul);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        throw new Error(errorJson.error || '서버 오류가 발생했습니다.');
+                    } catch (e) {
+                        throw new Error('서버 오류가 발생했습니다.');
                     }
-                });
+                }
+
+                const data = await response.json();
+                statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                document.getElementById('urlInput').value = '';
+                await loadKeywords();
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+            }
+        }
+
+        async function loadKeywords() {
+            try {
+                const response = await fetch('/api/keywords');
+                if (!response.ok) {
+                    throw new Error('키워드를 불러오는데 실패했습니다.');
+                }
+                const data = await response.json();
+                const keywordsDiv = document.getElementById('keywords');
+                keywordsDiv.innerHTML = data.keywords.map(keyword => 
+                    `<span class="keyword-item" onclick="loadRelatedArticles('${keyword}')">${keyword}</span>`
+                ).join('');
+            } catch (error) {
+                console.error('Error loading keywords:', error);
+            }
+        }
+
+        async function loadRelatedArticles(keyword) {
+            try {
+                const response = await fetch(`/api/articles?keyword=${encodeURIComponent(keyword)}`);
+                if (!response.ok) {
+                    throw new Error('관련 기사를 불러오는데 실패했습니다.');
+                }
+                const data = await response.json();
+                const articlesDiv = document.getElementById('relatedArticles');
+                articlesDiv.innerHTML = data.articles.map(article => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">${article.title}</h5>
+                            <p class="card-text">${article.content.substring(0, 200)}...</p>
+                            <a href="${article.url}" target="_blank" class="btn btn-sm btn-primary">기사 보기</a>
+                        </div>
+                    </div>
+                `).join('') || '<p>관련 기사가 없습니다.</p>';
+            } catch (error) {
+                console.error('Error loading related articles:', error);
+                document.getElementById('relatedArticles').innerHTML = 
+                    '<div class="alert alert-danger">관련 기사를 불러오는데 실패했습니다.</div>';
+            }
         }
 
         // 페이지 로드 시 키워드 로드
