@@ -4,6 +4,9 @@ from datetime import datetime
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 
 # Flask 앱 초기화
 app = Flask(__name__)
@@ -81,6 +84,53 @@ def get_articles():
     except Exception as e:
         app.logger.error(f'Error in get_articles: {str(e)}')
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/submit_url', methods=['POST'])
+def submit_url():
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': '유효하지 않은 URL입니다.'}), 400
+
+        url = data['url']
+        app.logger.info(f'Processing URL: {url}')
+
+        # URL에서 기사 내용 가져오기
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # 제목과 내용 추출
+        title = soup.title.string if soup.title else ''
+        content = ' '.join([p.get_text() for p in soup.find_all('p')])
+        
+        if not title or not content:
+            return jsonify({'error': '기사 내용을 파싱할 수 없습니다.'}), 400
+
+        # 데이터베이스에 저장
+        article = Newsletter(
+            title=title,
+            content=content,
+            url=url,
+            created_at=datetime.utcnow()
+        )
+        
+        db.session.add(article)
+        db.session.commit()
+        
+        return jsonify({
+            'message': '성공적으로 저장되었습니다.',
+            'article': article.to_dict()
+        })
+
+    except requests.RequestException as e:
+        app.logger.error(f'URL 요청 오류: {str(e)}')
+        return jsonify({'error': f'URL에 접근할 수 없습니다: {str(e)}'}), 400
+    except Exception as e:
+        app.logger.error(f'URL 처리 중 오류 발생: {str(e)}')
+        return jsonify({'error': f'오류가 발생했습니다: {str(e)}'}), 500
 
 @app.errorhandler(404)
 def not_found_error(error):
