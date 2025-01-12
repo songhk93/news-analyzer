@@ -18,7 +18,10 @@ import time
 # 환경 변수 로드
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, 
+    template_folder='templates',
+    static_folder='static'
+)
 # 데이터베이스 설정
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///newsletter.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -64,11 +67,21 @@ def create_tables():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        app.logger.info('Accessing index page')
+        return render_template('index.html')
+    except Exception as e:
+        app.logger.error(f'Error rendering index page: {str(e)}')
+        return str(e), 500
 
 @app.route('/articles')
 def articles():
-    return render_template('articles.html')
+    try:
+        app.logger.info('Accessing articles page')
+        return render_template('articles.html')
+    except Exception as e:
+        app.logger.error(f'Error rendering articles page: {str(e)}')
+        return str(e), 500
 
 @app.route('/api/articles', methods=['GET'])
 def get_articles():
