@@ -1,23 +1,28 @@
+import os
+import logging
+from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
 from collections import Counter
 import re
 from urllib.parse import urlparse
-import os
-from konlpy.tag import Okt
 import numpy as np
-from dotenv import load_dotenv
-import logging
-from logging.handlers import RotatingFileHandler
+from konlpy.tag import Okt
 from functools import wraps
 import time
 
 # 환경 변수 로드
 load_dotenv()
 
+# 기본 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Flask 앱 초기화
 app = Flask(__name__)
 
 # 기본 설정
@@ -32,26 +37,19 @@ app.config.update(
 db = SQLAlchemy(app)
 
 # 로깅 설정
-if not os.path.exists('logs'):
-    os.mkdir('logs')
-file_handler = RotatingFileHandler('logs/news_analyzer.log', maxBytes=10240, backupCount=10)
-file_handler.setFormatter(logging.Formatter(
-    '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-))
-file_handler.setLevel(logging.INFO)
-app.logger.addHandler(file_handler)
-app.logger.setLevel(logging.INFO)
-app.logger.info('News Analyzer startup')
+if not app.debug:
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+    file_handler = RotatingFileHandler('logs/news_analyzer.log', maxBytes=10240, backupCount=10)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
+    app.logger.info('News Analyzer startup')
 
-@app.before_request
-def before_request():
-    app.logger.info(f'Processing request: {request.method} {request.path}')
-
-@app.after_request
-def after_request(response):
-    app.logger.info(f'Request completed: {response.status}')
-    return response
-
+# 데이터베이스 모델
 class Newsletter(db.Model):
     seq = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(500), unique=True, nullable=False)
@@ -72,9 +70,22 @@ class Newsletter(db.Model):
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
         }
 
-def create_tables():
-    with app.app_context():
+# 데이터베이스 생성
+with app.app_context():
+    try:
         db.create_all()
+        app.logger.info('Database tables created successfully')
+    except Exception as e:
+        app.logger.error(f'Error creating database tables: {str(e)}')
+
+@app.before_request
+def before_request():
+    app.logger.info(f'Processing request: {request.method} {request.path}')
+
+@app.after_request
+def after_request(response):
+    app.logger.info(f'Request completed: {response.status}')
+    return response
 
 @app.route('/')
 def index():
@@ -82,7 +93,7 @@ def index():
         app.logger.info('Accessing index page')
         return render_template('index.html')
     except Exception as e:
-        app.logger.error(f'Error rendering index page: {str(e)}')
+        app.logger.error(f'Error in index route: {str(e)}')
         return str(e), 500
 
 @app.route('/articles')
@@ -91,7 +102,7 @@ def articles():
         app.logger.info('Accessing articles page')
         return render_template('articles.html')
     except Exception as e:
-        app.logger.error(f'Error rendering articles page: {str(e)}')
+        app.logger.error(f'Error in articles route: {str(e)}')
         return str(e), 500
 
 @app.route('/api/articles', methods=['GET'])
@@ -221,14 +232,13 @@ def delete_article(seq):
 @app.errorhandler(404)
 def not_found_error(error):
     app.logger.error(f'Page not found: {request.url}')
-    return jsonify({'error': '페이지를 찾을 수 없습니다.'}), 404
+    return render_template('404.html'), 404
 
 @app.errorhandler(500)
 def internal_error(error):
     db.session.rollback()
     app.logger.error(f'Server Error: {error}')
-    return jsonify({'error': '서버 오류가 발생했습니다.'}), 500
+    return render_template('500.html'), 500
 
 if __name__ == '__main__':
-    create_tables()
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+    app.run(debug=True)
