@@ -10,6 +10,10 @@ import os
 from konlpy.tag import Okt
 import numpy as np
 from dotenv import load_dotenv
+import logging
+from logging.handlers import RotatingFileHandler
+from functools import wraps
+import time
 
 # 환경 변수 로드
 load_dotenv()
@@ -19,6 +23,19 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///newsletter.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# 로깅 설정
+if not app.debug:
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    file_handler = RotatingFileHandler('logs/news_analyzer.log', maxBytes=10240, backupCount=10)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
+    app.logger.info('News Analyzer startup')
 
 class Newsletter(db.Model):
     seq = db.Column(db.Integer, primary_key=True)
@@ -99,7 +116,18 @@ def submit_url():
     except Exception as e:
         return jsonify({'error': f'오류가 발생했습니다: {str(e)}'}), 400
 
+def log_performance(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        start_time = time.time()
+        result = f(*args, **kwargs)
+        end_time = time.time()
+        app.logger.info(f'Function {f.__name__} took {end_time - start_time:.2f} seconds to execute')
+        return result
+    return decorated_function
+
 @app.route('/api/keywords')
+@log_performance
 def get_keywords():
     week_ago = datetime.now() - timedelta(days=7)
     articles = Newsletter.query.filter(Newsletter.date >= week_ago).all()
@@ -164,6 +192,17 @@ def delete_article(seq):
     db.session.delete(article)
     db.session.commit()
     return jsonify({'message': '기사가 삭제되었습니다.'})
+
+@app.errorhandler(404)
+def not_found_error(error):
+    app.logger.error(f'Page not found: {request.url}')
+    return jsonify({'error': '페이지를 찾을 수 없습니다.'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    app.logger.error(f'Server Error: {error}')
+    return jsonify({'error': '서버 오류가 발생했습니다.'}), 500
 
 if __name__ == '__main__':
     create_tables()
