@@ -1,6 +1,7 @@
 import sys
-path = '/home/songhk/news-analyzer'
-if path not in sys.path:
-    sys.path.append(path)
 
+# Add the application directory to the Python path
+sys.path.append('/home/songhk/news-analyzer')
+
+# Import the Flask application object
 from app import app as application
