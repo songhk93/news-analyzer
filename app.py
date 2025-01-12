@@ -3,7 +3,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
@@ -14,9 +13,6 @@ import numpy as np
 from konlpy.tag import Okt
 from functools import wraps
 import time
-
-# 환경 변수 로드
-load_dotenv()
 
 # 기본 로깅 설정
 logging.basicConfig(level=logging.INFO)
