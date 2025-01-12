@@ -6,12 +6,13 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Add the project directory to the Python path
-project_dir = os.path.dirname(os.path.abspath(__file__))
+# 프로젝트 디렉토리 설정
+project_dir = '/home/songhk/news-analyzer'
 if project_dir not in sys.path:
     sys.path.insert(0, project_dir)
 
-from app import app as application
+# 환경 변수 설정
+os.environ['FLASK_APP'] = 'app.py'
+os.environ['FLASK_ENV'] = 'production'
 
-if __name__ == "__main__":
-    application.run()
+from app import app as application
